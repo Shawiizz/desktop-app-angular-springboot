@@ -83,7 +83,11 @@ public class MinecraftController {
         }
         
         User user = userOpt.get();
-        minecraftService.launchGame(user);
+        minecraftService.launchGame(user)
+            .exceptionally(throwable -> {
+                log.error("Game launch failed with exception", throwable);
+                return false;
+            });
         
         return ResponseEntity.ok(Map.of(
             "success", true,

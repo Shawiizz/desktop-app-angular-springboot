@@ -11,6 +11,7 @@ import { Toast } from 'primeng/toast';
 import { Divider } from 'primeng/divider';
 import { MessageService } from 'primeng/api';
 import { MinecraftService } from '../../services/minecraft.service';
+import { AuthStoreService } from '../../services/auth-store.service';
 import { GameSettings } from '../../models/models';
 
 @Component({
@@ -210,6 +211,7 @@ export class SettingsComponent implements OnInit {
   private readonly mcService = inject(MinecraftService);
   private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
+  private readonly authStore = inject(AuthStoreService);
     constructor() {
       // Fallback: si jamais le guard n'est pas appelé (navigation directe, bug Angular, etc)
       if (!this.authStore.isAuthenticated()) {

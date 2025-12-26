@@ -8,6 +8,7 @@ import fr.flowarg.flowupdater.versions.VanillaVersion;
 import fr.flowarg.flowupdater.versions.neoforge.NeoForgeVersion;
 import fr.flowarg.flowupdater.versions.neoforge.NeoForgeVersionBuilder;
 import fr.flowarg.openlauncherlib.NoFramework;
+import fr.theshark34.openlauncherlib.JavaUtil;
 import fr.theshark34.openlauncherlib.minecraft.AuthInfos;
 import fr.theshark34.openlauncherlib.minecraft.GameFolder;
 import lombok.extern.slf4j.Slf4j;
@@ -20,10 +21,14 @@ import sample.app.desktop.model.GameStatus.GameState;
 import sample.app.desktop.model.User;
 
 import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.*;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 @Slf4j
 @Service
@@ -31,6 +36,10 @@ public class MinecraftService {
     
     private static final String MINECRAFT_VERSION = "1.21.1";
     private static final String NEOFORGE_VERSION = "21.1.77"; // Latest stable for 1.21.1
+    
+    // Adoptium Temurin JDK 21 for Windows x64
+    private static final String JDK_URL = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_windows_hotspot_21.0.5_11.zip";
+    private static final String JDK_FOLDER_NAME = "jdk-21.0.5+11";
     
     private final AppConfigService appConfigService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -69,6 +78,110 @@ public class MinecraftService {
         }
     }
     
+    /**
+     * Get the path to the Java executable, downloading JDK if necessary
+     */
+    private Path getJavaExecutable() throws IOException {
+        String appDataDir = appConfigService.getAppDataPath();
+        Path javaDir = Paths.get(appDataDir, "java");
+        Path jdkDir = javaDir.resolve(JDK_FOLDER_NAME);
+        Path javaExe = jdkDir.resolve("bin").resolve("java.exe");
+        
+        if (Files.exists(javaExe)) {
+            log.info("Using existing Java installation: {}", javaExe);
+            return javaExe;
+        }
+        
+        // Need to download JDK
+        log.info("Java not found, downloading Adoptium Temurin JDK 21...");
+        Files.createDirectories(javaDir);
+        
+        Path zipFile = javaDir.resolve("jdk.zip");
+        downloadJdk(zipFile);
+        extractZip(zipFile, javaDir);
+        Files.deleteIfExists(zipFile);
+        
+        if (!Files.exists(javaExe)) {
+            throw new IOException("Java executable not found after extraction: " + javaExe);
+        }
+        
+        log.info("Java installed successfully: {}", javaExe);
+        return javaExe;
+    }
+    
+    private void downloadJdk(Path destination) throws IOException {
+        updateStatus(GameState.DOWNLOADING, 0, "Downloading Java Runtime...", "", 0, 0);
+        
+        URL url = new URL(JDK_URL);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+        connection.setInstanceFollowRedirects(true);
+        
+        // Handle GitHub redirects
+        int status = connection.getResponseCode();
+        if (status == HttpURLConnection.HTTP_MOVED_TEMP || status == HttpURLConnection.HTTP_MOVED_PERM) {
+            String newUrl = connection.getHeaderField("Location");
+            connection = (HttpURLConnection) new URL(newUrl).openConnection();
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+        }
+        
+        long totalBytes = connection.getContentLengthLong();
+        log.info("Downloading JDK ({} MB)...", totalBytes / 1024 / 1024);
+        
+        try (InputStream in = connection.getInputStream();
+             OutputStream out = Files.newOutputStream(destination)) {
+            
+            byte[] buffer = new byte[8192];
+            long downloadedBytes = 0;
+            int bytesRead;
+            
+            while ((bytesRead = in.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+                downloadedBytes += bytesRead;
+                
+                double progress = totalBytes > 0 ? (double) downloadedBytes / totalBytes * 100 : 0;
+                updateStatus(GameState.DOWNLOADING, progress, "Downloading Java Runtime...", 
+                    "", downloadedBytes, totalBytes);
+            }
+        }
+        
+        log.info("JDK download complete");
+    }
+    
+    private void extractZip(Path zipFile, Path destDir) throws IOException {
+        updateStatus(GameState.INSTALLING, 0, "Extracting Java Runtime...", "", 0, 0);
+        log.info("Extracting JDK to {}", destDir);
+        
+        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile))) {
+            ZipEntry entry;
+            byte[] buffer = new byte[8192];
+            
+            while ((entry = zis.getNextEntry()) != null) {
+                Path entryPath = destDir.resolve(entry.getName()).normalize();
+                
+                // Security check - prevent zip slip
+                if (!entryPath.startsWith(destDir)) {
+                    throw new IOException("Bad zip entry: " + entry.getName());
+                }
+                
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (OutputStream out = Files.newOutputStream(entryPath)) {
+                        int len;
+                        while ((len = zis.read(buffer)) > 0) {
+                            out.write(buffer, 0, len);
+                        }
+                    }
+                }
+                zis.closeEntry();
+            }
+        }
+        
+        log.info("JDK extraction complete");
+    }
+
     public GameStatus getStatus() {
         GameStatus status = currentStatus.get();
         // If status shows NOT_INSTALLED but game is actually installed, update it
@@ -167,7 +280,13 @@ public class MinecraftService {
                     return false;
                 }
                 
-                updateStatus(GameState.LAUNCHING, 0, "Launching game...", "", 0, 0);
+                updateStatus(GameState.LAUNCHING, 0, "Preparing Java Runtime...", "", 0, 0);
+                
+                // Get or download Java
+                Path javaExe = getJavaExecutable();
+                log.info("Using Java: {}", javaExe);
+                
+                updateStatus(GameState.LAUNCHING, 20, "Launching game...", "", 0, 0);
                 
                 Path gameDir = Paths.get(settings.getGameDirectory());
                 
@@ -184,6 +303,11 @@ public class MinecraftService {
                     authInfos,
                     GameFolder.FLOW_UPDATER
                 );
+                
+                // Set custom Java path globally for OpenLauncherLib
+                String javaCommand = "\"" + javaExe.toAbsolutePath().toString() + "\"";
+                JavaUtil.setJavaCommand(javaCommand);
+                log.info("JavaUtil configured with custom Java: {}", javaCommand);
                 
                 // Configure JVM arguments
                 noFramework.getAdditionalVmArgs().addAll(Arrays.asList(
@@ -203,13 +327,35 @@ public class MinecraftService {
                 
                 log.info("Launching Minecraft {} with NeoForge {} for user {}", 
                     MINECRAFT_VERSION, NEOFORGE_VERSION, user.getDisplayName());
+                log.info("Game directory: {}", gameDir);
+                log.info("JVM args: -Xms{}M -Xmx{}M", settings.getMinRamMb(), settings.getMaxRamMb());
+                
+                updateStatus(GameState.LAUNCHING, 50, "Starting Minecraft...", "", 0, 0);
+                
+                log.info("Calling noFramework.launch()...");
                 
                 // Launch with NeoForge
-                gameProcess = noFramework.launch(
-                    MINECRAFT_VERSION,
-                    NEOFORGE_VERSION,
-                    NoFramework.ModLoader.NEO_FORGE
-                );
+                try {
+                    gameProcess = noFramework.launch(
+                        MINECRAFT_VERSION,
+                        NEOFORGE_VERSION,
+                        NoFramework.ModLoader.NEO_FORGE
+                    );
+                } catch (Throwable t) {
+                    log.error("Exception during noFramework.launch(): ", t);
+                    throw t;
+                }
+                
+                log.info("noFramework.launch() returned successfully");
+                
+                if (gameProcess == null) {
+                    log.error("Game process is null after launch!");
+                    updateStatus(GameState.ERROR, 0, "Launch failed: process is null", "", 0, 0);
+                    return false;
+                }
+                
+                log.info("Game process started, PID: {}", gameProcess.pid());
+                log.info("Process alive: {}", gameProcess.isAlive());
                 
                 // Monitor game process
                 monitorGameProcess();
@@ -217,7 +363,7 @@ public class MinecraftService {
                 updateStatus(GameState.RUNNING, 100, "Game is running", "", 0, 0);
                 return true;
                 
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 log.error("Failed to launch game", e);
                 updateStatus(GameState.ERROR, 0, "Launch failed: " + e.getMessage(), "", 0, 0);
                 currentStatus.get().setErrorMessage(e.getMessage());
@@ -228,28 +374,57 @@ public class MinecraftService {
     }
     
     private void monitorGameProcess() {
-        Thread monitor = new Thread(() -> {
+        // Thread for stdout
+        Thread stdoutMonitor = new Thread(() -> {
             try {
-                // Read game output
                 BufferedReader reader = new BufferedReader(
                     new InputStreamReader(gameProcess.getInputStream()));
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    log.debug("[Minecraft] {}", line);
+                    log.info("[Minecraft] {}", line);
                 }
-                
+            } catch (Exception e) {
+                log.error("Error reading game stdout", e);
+            }
+        }, "GameStdoutMonitor");
+        stdoutMonitor.setDaemon(true);
+        stdoutMonitor.start();
+        
+        // Thread for stderr
+        Thread stderrMonitor = new Thread(() -> {
+            try {
+                BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(gameProcess.getErrorStream()));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    log.warn("[Minecraft-ERR] {}", line);
+                }
+            } catch (Exception e) {
+                log.error("Error reading game stderr", e);
+            }
+        }, "GameStderrMonitor");
+        stderrMonitor.setDaemon(true);
+        stderrMonitor.start();
+        
+        // Thread to wait for process exit
+        Thread exitMonitor = new Thread(() -> {
+            try {
                 int exitCode = gameProcess.waitFor();
                 log.info("Minecraft exited with code: {}", exitCode);
                 
-                updateStatus(GameState.READY, 100, "Game closed", "", 0, 0);
+                if (exitCode != 0) {
+                    updateStatus(GameState.ERROR, 0, "Game crashed with exit code: " + exitCode, "", 0, 0);
+                } else {
+                    updateStatus(GameState.READY, 100, "Game closed", "", 0, 0);
+                }
                 gameProcess = null;
                 
             } catch (Exception e) {
-                log.error("Error monitoring game process", e);
+                log.error("Error waiting for game process", e);
             }
-        }, "GameMonitor");
-        monitor.setDaemon(true);
-        monitor.start();
+        }, "GameExitMonitor");
+        exitMonitor.setDaemon(true);
+        exitMonitor.start();
     }
     
     public boolean isGameRunning() {

@@ -1,0 +1,16 @@
+{
+  "resources": {
+    "includes": [
+      {"pattern": "\\Qapp-config.json\\E"},
+      {"pattern": "\\Qapplication.properties\\E"},
+      {"pattern": "\\Qapplication-dev.properties\\E"},
+      {"pattern": "\\Qlogback-spring.xml\\E"},
+      {"pattern": "static/.*"},
+      {"pattern": "assets/.*"},
+      {"pattern": "assets/languages/.*"},
+      {"pattern": "\\Qassets/languages/en.json\\E"},
+      {"pattern": "\\Qassets/languages/fr.json\\E"}
+    ]
+  },
+  "bundles": []
+}

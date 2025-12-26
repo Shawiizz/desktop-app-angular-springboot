@@ -140,6 +140,9 @@ graalvmNative {
                 '--enable-https',
                 '-H:+ReportExceptionStackTraces',
                 '--initialize-at-build-time=org.slf4j',
+                '--initialize-at-run-time=fr.theshark34.openlauncherlib.util.LogUtil',
+                '--initialize-at-run-time=fr.theshark34.openlauncherlib.language.core.DefaultLanguageManager',
+                '-H:IncludeResources=assets/languages/.*',
             ])
             
             resources {
