@@ -30,12 +30,20 @@ configurations {
 
 repositories {
     mavenCentral()
+    maven { url 'https://jitpack.io' }
 }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    
+    // FlowUpdater for Minecraft downloading/updating
+    implementation 'fr.flowarg:flowupdater:1.9.3'
+    
+    // OpenLauncherLib for launching Minecraft
+    implementation 'fr.flowarg:openlauncherlib:3.2.11'
+    
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'

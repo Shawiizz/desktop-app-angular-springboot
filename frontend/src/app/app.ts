@@ -13,9 +13,14 @@ import { TitlebarComponent } from './titlebar/titlebar.component';
     </div>
   `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
     .app-content {
-      margin-top: 32px;
-      height: calc(100vh - 32px);
+      flex: 1;
       overflow: auto;
       scrollbar-width: none;
       -ms-overflow-style: none;

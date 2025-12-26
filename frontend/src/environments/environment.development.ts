@@ -1,5 +1,5 @@
-// Development environment
+// Development environment - uses proxy to backend
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:8080'
+  apiUrl: '' // Empty = use relative URLs, proxy will forward to backend
 };

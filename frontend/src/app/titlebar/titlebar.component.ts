@@ -7,8 +7,33 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
   selector: 'app-titlebar',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './titlebar.component.html',
-  styleUrls: ['./titlebar.component.css']
+  template: `
+    <div class="titlebar h-8 bg-black flex items-center justify-between px-3 select-none"
+         style="-webkit-app-region: drag;">
+      <div class="flex items-center gap-2">
+        <div class="w-4 h-4 rounded bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+          <i class="pi pi-box text-white text-[8px]"></i>
+        </div>
+        <span class="text-xs font-medium text-zinc-400">{{ appName }}</span>
+      </div>
+      
+      <div class="flex items-center" style="-webkit-app-region: no-drag;">
+        <button class="w-10 h-8 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                (click)="minimize()">
+          <i class="pi pi-minus text-xs"></i>
+        </button>
+        <button class="w-10 h-8 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                (click)="toggleMaximize()">
+          <i class="pi pi-stop text-xs"></i>
+        </button>
+        <button class="w-10 h-8 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-red-600 transition-colors"
+                (click)="close()">
+          <i class="pi pi-times text-xs"></i>
+        </button>
+      </div>
+    </div>
+  `,
+  styles: []
 })
 export class TitlebarComponent implements OnInit {
   appName = 'Desktop App';

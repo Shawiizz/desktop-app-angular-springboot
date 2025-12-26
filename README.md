@@ -43,7 +43,7 @@ Desktop application with Spring Boot backend (API) and Angular frontend, package
 ### Backend only
 
 ```bash
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
 Access: http://localhost:8080
@@ -53,7 +53,7 @@ Access: http://localhost:8080
 ```bash
 cd frontend
 npm install
-npm run start
+npm run dev
 ```
 
 Access: http://localhost:4200
@@ -64,11 +64,11 @@ Run both in separate terminals:
 
 ```bash
 # Terminal 1 - Backend
-./gradlew bootRun
+./gradlew bootRun --args='--spring.profiles.active=dev'
 
 # Terminal 2 - Frontend
 cd frontend
-npm run start
+npm run dev
 ```
 
 ## Production Build
